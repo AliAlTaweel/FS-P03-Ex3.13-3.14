@@ -1,78 +1,84 @@
+
+require("dotenv").config(); // Ensure this is called as a function
 const express = require("express");
-require("dotenv").config();
-const cors = require("cors");
+const mongoose = require("mongoose");
 const morgan = require("morgan");
+const cors = require("cors"); // Uncomment this to use CORS
+const newPerson = require('./models/phonebook')
 
-const port = process.env.VITE_PORT || 3003;
+
 const app = express();
+const PORT = process.env.VITE_PORT || 3003;
 
-app.use(cors());
-app.use(morgan("tiny"));
+app.use(cors()); // Enable CORS for all routes
+app.use(express.json()); // Middleware to parse JSON bodies
 app.use(express.static("dist"));
-app.use(express.json());
+app.use(morgan("tiny")); // Use morgan logging middleware for requests
 
-let persons = [
-  { name: "Arto Hellas", number: "040-123456", id: "1" },
-  { name: "s Lovelace", number: "39-44-5323523", id: "2" },
-  { name: "Dan Abramov", number: "12-43-234345", id: "3" },
-  { name: "Mary Poppendieck", number: "39-23-6423122", id: "4" },
-];
 
-//=========== get all persons ============
+// Get all persons
 app.get("/api/persons", (req, res) => {
-  res.json(persons);
-  console.log("Fetched all persons.");
+  newPerson.find({})
+    .then((persons) => {
+      res.json(persons);
+    })
+    .catch((error) => {
+      res.status(500).json({ error: "Could not retrieve persons" });
+    });
 });
 
-//=========== get person by ID ============
-app.get("/api/person/:id", (req, res) => {
-  const id = req.params.id;
-  const person = persons.find((person) => person.id === id);
-
-  if (person) {
-    res.json(person);
-  } else {
-    res.status(404).send({ error: "Person with this ID not found" });
-  }
+// Get info about persons
+app.get('/api/info', async (req, res) => {
+  const persons = await Note.find({});
+  res.send(`persons has info for ${persons.length} persons <br/><br/>${new Date()}.`);
 });
 
-//=========== delete person by ID ============
-app.delete("/api/person/:id", (req, res) => {
-  const id = req.params.id;
-  persons = persons.filter((person) => person.id !== id);
-  res.status(204).end();
+// Get note by ID
+app.get('/api/persons/:id', (req, res) => {
+  Note.findById(req.params.id)
+    .then((note) => {
+      if (note) {
+        res.json(note);
+      } else {
+        res.status(404).json({ error: 'No such note!' });
+      }
+    })
+    .catch((error) => res.status(400).json({ error: 'Malformatted ID' }));
 });
 
-//=========== add person ============
+// Delete note by ID
+app.delete('/api/persons/:id', (req, res) => {
+  newPerson.findByIdAndRemove(req.params.id)
+    .then(() => res.status(204).end())
+    .catch((error) => res.status(400).json({ error: 'Malformatted ID' }));
+});
+
+// Generate a new ID
 const generateId = () => {
-  const maxId = persons.length > 0 ? Math.max(...persons.map((p) => Number(p.id))) : 0;
-  return (maxId + 1).toString(); // Convert to string to maintain consistent ID type
+  const maxId =
+    Note.length > 0 ? Math.max(...Note.map((note) => note.id)) : 0;
+  return maxId + 1;
 };
 
-app.post("/api/persons", (req, res) => {
+// Create a new note
+app.post('/api/persons', (req, res) => {
   const { name, number } = req.body;
-  console.log("Received new person:", req.body);
 
-  if (!name || !number) {
-    return res.status(400).json({ error: "Name or number is missing" });
+  if (!name) {
+    return res.status(400).json({ error: 'Name is required!' });
   }
 
-  const personExists = persons.some((person) => person.name === name);
-  if (personExists) {
-    return res.status(400).json({ error: "Name must be unique" });
-  }
-
-  const newPerson = {
-    id: generateId(),
+  const newNum = new newPerson({
     name,
     number,
-  };
+  });
 
-  persons = [...persons, newPerson];
-  res.status(201).json(newPerson); // Use status 201 for created resources
+  newNum.save()
+    .then((savedNote) => res.status(201).json(savedNote))
+    .catch((error) => res.status(400).json({ error: 'Error saving person' }));
 });
 
-//=========== listen to port ============
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
